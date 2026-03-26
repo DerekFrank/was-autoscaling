@@ -1,8 +1,4 @@
-# WAS Counter-Proposal Summary
-
-## Context
-
-Counter-proposal to Workload Aware Scheduler (WAS) Potential Capacity API design. The WAS proposal recreates concepts Karpenter has already battle-tested. This proposal builds on Karpenter's lessons learned.
+# WAS Scheduler Provisioning
 
 ## Functional Requirements
 
