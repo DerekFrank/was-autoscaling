@@ -27,10 +27,12 @@ Counter-Proposal
 │   └── Scheduling Action Policy
 ├── Pod Binding / Reservation
 ├── Scheduling Simulation API
+├── Shared Autoscaling APIs
+│   ├── Resource Limits (CapacityQuota)
+│   └── Capacity Buffers (CapacityBuffer)
 └── NodeClaim / CapacityRequest API (name pending)
     ├── Group Scheduling
-    ├── Feedback Loop / Stockout Handling
-    └── Resource Limits
+    └── Feedback Loop / Stockout Handling
 ```
 
 ---
@@ -93,6 +95,27 @@ The interface between the scheduler and the capacity API — how the scheduler r
 
 ---
 
+## Shared Autoscaling APIs
+
+APIs originating in sig-autoscaling (currently `autoscaling.x-k8s.io/v1alpha1` in CAS) that will need upstreaming into `capacity.k8s.io/v1` alongside the other primitives in this proposal. These are autoscaler-agnostic — they govern provisioning behavior without embedding scheduling logic, and must work with both CAS and Karpenter-style autoscalers.
+
+**Resource Limits (CapacityQuota)** — `resource-limits-design-scratch.md`
+- Cluster-scoped CRD that constrains aggregate provisioned resources (CPU, memory, node count, DRA device classes) across arbitrary subsets of nodes identified by label selector
+- Multiple overlapping quotas all respected — provisioning blocked if any matching quota would be exceeded
+- Accounts for in-flight NodeClaims to avoid over-provisioning during concurrent scheduling
+- Must be consumable by the scheduler, since provisioning is a scheduling action in our model
+- Prior art: sig-autoscaling CapacityQuota (`autoscaling.x-k8s.io/v1alpha1`), merged into CAS ([PR #8894](https://github.com/kubernetes/autoscaler/pull/8894))
+
+**Capacity Buffers (CapacityBuffer)** — No design yet.
+- Proactive buffer capacity provisioning — ensures spare capacity is available to handle burst workloads or speed up scaling events
+- Currently implemented in CAS via placeholder pods: a CapacityBuffer references a PodTemplate (or a scalable resource) and maintains a desired number of buffer "chunks" that trigger the autoscaler to pre-provision nodes
+- Supports fixed replica count, percentage-of-workload scaling, and resource-limit-based chunk calculation
+- Prior art: sig-autoscaling CapacityBuffer (`autoscaling.x-k8s.io/v1alpha1`), merged into CAS
+- Needs design work for upstreaming — the placeholder-pod mechanism is CAS-specific; the upstream API may need to express buffer intent differently given that provisioning is a scheduler action in our model
+- Buffers and reservations must be respected during all scheduling calls — provisioning, placement on existing nodes, consolidation, and simulation. The scheduler must treat buffer demand as real demand that cannot be displaced. The design must address how buffer intent is represented to the scheduler (reservations, hypothetical pods, or another mechanism) so that it participates in scheduling decisions alongside real pending pods.
+
+---
+
 ## NodeClaim / CapacityRequest API (name pending)
 
 `nodeclaim-api-scratch.md`
@@ -111,20 +134,16 @@ The API for requesting and managing provisioned capacity. Post-provisioning life
 - NodeClaim has requirements (not specific instance type)
 - Open: scheduler batching, failure propagation
 
-**Resource Limits** — No design yet.
-- How to express "these offerings share a CPU/memory budget" (e.g., reservation pool with finite capacity)
-- How in-flight NodeClaims count against limits
-- How limits interact with availability signals
-
 ---
 
 ## Scheduling Simulation API
 
-Autoscalers like Karpenter implement disruption and drift — operations that require answering "if I remove this node, can its pods be placed elsewhere?" Today Karpenter maintains its own scheduling simulation to answer this. To satisfy the "no scheduling logic in autoscalers" requirement, the scheduler must expose a simulation API that autoscalers can query to evaluate hypothetical scheduling outcomes without maintaining their own scheduling algorithm.
+Autoscalers like Karpenter implement disruption and drift — operations that require answering "if I remove this node, can its pods be placed elsewhere?" Today Karpenter maintains its own scheduling simulation to answer this. To satisfy the "no scheduling logic in autoscalers" requirement, the scheduler must expose a simulation API that autoscalers can query to evaluate hypothetical scheduling outcomes without maintaining their own scheduling algorithm. Consolidation and disruption are the primary use cases.
 
 - Must support "what if" queries: given a set of pods and a modified cluster state, can they be scheduled?
 - Must account for the full scheduling policy (fallback ordering, action preferences, topology constraints)
 - Must be usable by any autoscaler, not Karpenter-specific
+- **Performance isolation:** The simulation API must operate within a decoupled control loop or independent scheduler instance to preserve primary scheduling latency and throughput. Simulation is a high-volume, potentially expensive operation — it must not compete with the hot scheduling path for resources or introduce latency to real pod placement.
 - No design yet.
 
 ---
@@ -136,4 +155,6 @@ Autoscalers like Karpenter implement disruption and drift — operations that re
 - Fallback Ordering Contract
 - Scheduling Action Policy
 - Scheduling Simulation API
-- Resource Limits
+- Capacity Buffers
+- Migration Strategy
+- Governance Model

@@ -1,7 +1,7 @@
 # Resource Limits — Design Scratch Notes
 
 **Date:** March 26, 2026
-**Context:** Subsystem of the WAS counter-proposal. See `was-counter-proposal-summary.md` for overall design tree.
+**Context:** Part of the Shared Autoscaling APIs category. See `top-level-doc-scheduler-autoscaling.md` for overall design tree.
 
 ## Problem
 

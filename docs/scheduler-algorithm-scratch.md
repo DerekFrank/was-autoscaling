@@ -17,6 +17,12 @@ Adopt Karpenter's greedy scheduler model:
 
 Assume kube-scheduler will have/extend a batching mechanism (potentially from gang scheduling work). Provisioning runs as a batch operation, not per-pod.
 
+> **TODO:** This section needs to be more specific about the batch *formation* mechanism — i.e., how the scheduler collects pods into a batch before running the greedy packing algorithm. The current text describes what happens within a batch (greedy packing, constraint narrowing) but is silent on how the batch is triggered. The WAS alignment doc (`google-proposals/was-node-autoscaling-alignment.md`) suggests a temporal delay in the provisioning cycle to accumulate pods before committing to NodeClaims. Key questions to address:
+> - What triggers a provisioning batch? Time-based delay? Pod count threshold? Queue drain?
+> - How long does the scheduler wait before cutting off accumulation?
+> - How does this interact with the normal scheduling queue and existing gang scheduling work?
+> - What prevents the delay from regressing scheduling latency for pods that could bind to existing nodes?
+
 ## NodePool Awareness
 
 **Decision:** Scheduler does NOT have NodePool awareness.
